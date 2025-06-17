@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Acompanhamento de Ponto</title>
+<style>
+:root{
+  --primary:#1967d2;
+  --danger:#d32f2f;
+  --light:#f5f5f5;
+  --dark:#212121;
+}
+*{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;margin:0;padding:0;}
+body{background:var(--light);padding:20px;color:var(--dark);} 
+h1{margin-bottom:1rem;color:var(--primary);} 
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:1.5rem;} 
+label{display:flex;flex-direction:column;font-size:.9rem;} 
+input[type="time"]{padding:.5rem;border:1px solid #ccc;border-radius:4px;} 
+button{grid-column:1/-1;padding:.75rem;border:none;border-radius:4px;background:var(--primary);color:white;font-size:1rem;cursor:pointer;} 
+button:hover{opacity:.9;} 
+table{width:100%;border-collapse:collapse;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.1);} 
+th,td{padding:.75rem;text-align:left;border-bottom:1px solid #efefef;} 
+th{background:var(--primary);color:white;font-weight:500;} 
+tr:last-child td{border-bottom:none;} 
+.countdown{font-weight:bold;} 
+.overdue{color:var(--danger);} 
+</style>
+</head>
+<body>
+<h1>Acompanhamento de Ponto</h1>
+
+<form id="scheduleForm">
+  <label>Entrada
+    <input type="time" id="entrada" required>
+  </label>
+  <label>Pausa Almoço
+    <input type="time" id="almoco" required>
+  </label>
+  <label>Retorno
+    <input type="time" id="retorno" required>
+  </label>
+  <label>Encerramento
+    <input type="time" id="saida" required>
+  </label>
+  <button type="submit">Iniciar Monitoramento</button>
+</form>
+
+<table id="eventsTable" style="display:none;">
+  <thead>
+    <tr><th>Evento</th><th>Horário</th><th>Tempo Restante</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+const form=document.getElementById('scheduleForm');
+const table=document.getElementById('eventsTable');
+const tbody=table.querySelector('tbody');
+let events=[];
+let intervalId=null;
+
+// Solicita permissão para notificações, se disponível
+if('Notification'in window && Notification.permission!=='granted'){
+  Notification.requestPermission();
+}
+
+form.addEventListener('submit',e=>{
+  e.preventDefault();
+  clearInterval(intervalId);
+  events=[
+    {nome:'Entrada',time:document.getElementById('entrada').value},
+    {nome:'Pausa almoço',time:document.getElementById('almoco').value},
+    {nome:'Retorno',time:document.getElementById('retorno').value},
+    {nome:'Encerramento',time:document.getElementById('saida').value},
+  ].map(ev=>{
+    // Converte string HH:MM para Date hoje (ou amanhã se já passou)
+    const [h,m]=ev.time.split(':').map(Number);
+    const now=new Date();
+    const date=new Date(now.getFullYear(),now.getMonth(),now.getDate(),h,m,0,0);
+    if(date<now) date.setDate(date.getDate()+1); // agenda para o dia seguinte caso já tenha passado
+    return {...ev,date,notified:false};
+  });
+
+  renderRows();
+  table.style.display='';
+  intervalId=setInterval(updateCountdowns,1000);
+  updateCountdowns();
+});
+
+function renderRows(){
+  tbody.innerHTML='';
+  events.forEach((ev,idx)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${ev.nome}</td>
+      <td>${ev.time}</td>
+      <td class="countdown" id="count${idx}">--:--:--</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateCountdowns(){
+  const now=new Date();
+  events.forEach((ev,i)=>{
+    const diff=ev.date-now;
+    const cell=document.getElementById('count'+i);
+    if(diff<=0){
+      cell.textContent='agora';
+      cell.classList.add('overdue');
+      if(!ev.notified){
+        notify(ev.nome);
+        ev.notified=true;
+      }
+    }else{
+      cell.classList.remove('overdue');
+      cell.textContent=formatDiff(diff);
+    }
+  });
+}
+
+function formatDiff(ms){
+  const totalSeconds=Math.floor(ms/1000);
+  const h=String(Math.floor(totalSeconds/3600)).padStart(2,'0');
+  const m=String(Math.floor((totalSeconds%3600)/60)).padStart(2,'0');
+  const s=String(totalSeconds%60).padStart(2,'0');
+  return `${h}h ${m}m ${s}s`;
+}
+
+function notify(eventName){
+  if('Notification'in window && Notification.permission==='granted'){
+    new Notification('Registro de ponto', {body:'Hora de registrar: '+eventName});
+  }else{
+    alert('Hora de registrar: '+eventName);
+  }
+}
+</script>
+</body>
+</html>
